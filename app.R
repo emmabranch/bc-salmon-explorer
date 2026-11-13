@@ -76,7 +76,14 @@ ui <- page_sidebar(
               uiOutput("trend_summary"),
               uiOutput("trend_plot_ui")),
     nav_panel("Methods and data quality",
-              p("Coming soon."))
+              methods_tab_ui(
+                n_streams      = nrow(streams),
+                n_cus          = n_distinct(streams$cuid),
+                n_obs          = nrow(counts),
+                year_min       = year_min,
+                year_max       = year_max,
+                trend_settings = trend_settings
+              ))
   )
 )
 
@@ -247,7 +254,7 @@ server <- function(input, output, session) {
       geom_line(colour = "grey70", linewidth = 0.4) +
       geom_point(colour = "grey50", size = 0.8) +
       scale_y_continuous(transform = "log1p", labels = scales::comma) +
-      labs(x = NULL, y = "Spawners (log scale)") +
+      labs(x = NULL, y = "Spawner estimate (log scale)") +
       theme_minimal(base_size = 13)
 
     # Overlay the CU-level trend line, drawn through the mean of the model data
@@ -261,6 +268,50 @@ server <- function(input, output, session) {
     }
 
     ggplotly(p, tooltip = "text")
+  })
+
+  # ---- Methods and data quality ----
+
+  # Counts for the species and region filters (CU filter ignored here)
+  quality_counts <- reactive({
+    ids <- streams |>
+      filter(species %in% input$species,
+             input$region == "" | region == input$region) |>
+      pull(streamid)
+    counts |>
+      filter(streamid %in% ids,
+             between(year, input$years[1], input$years[2]))
+  })
+
+  output$coverage_plot <- renderPlot({
+    d <- quality_counts() |> count(year, name = "n_streams")
+    req(nrow(d) > 0)
+    ggplot(d, aes(year, n_streams)) +
+      geom_col(fill = "#56B4E9", width = 1) +
+      labs(title = "Streams with an estimate, by year",
+           x = NULL, y = "Streams") +
+      theme_minimal(base_size = 13)
+  })
+
+  output$quality_plot <- renderPlot({
+    quality_levels <- c("High", "Medium-High", "Medium", "Medium-Low", "Low", "Unknown")
+    d <- quality_counts() |>
+      mutate(decade  = floor(year / 10) * 10,
+             quality = factor(ifelse(is.na(survey_quality), "Unknown",
+                                     as.character(survey_quality)),
+                              levels = quality_levels)) |>
+      count(decade, quality)
+    req(nrow(d) > 0)
+    ggplot(d, aes(factor(decade), n, fill = quality)) +
+      geom_col(position = "fill") +
+      scale_y_continuous(labels = scales::percent) +
+      scale_fill_manual(values = c("High" = "#0072B2", "Medium-High" = "#56B4E9",
+                                   "Medium" = "#009E73", "Medium-Low" = "#E69F00",
+                                   "Low" = "#D55E00", "Unknown" = "#CCCCCC"),
+                        name = "Survey quality") +
+      labs(title = "Survey quality of estimates, by decade",
+           x = NULL, y = "Share of estimates") +
+      theme_minimal(base_size = 13)
   })
 }
 
