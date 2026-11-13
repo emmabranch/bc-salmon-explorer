@@ -30,7 +30,7 @@ This is an independent portfolio project. It is not produced or endorsed by the 
 - **Abundance measure:** PSF's `MAX_ESTIMATE`, the largest available value among the NuSEDS spawner, removal, and total return fields for each stream and year.
 - **Cleaning:** rows not matched to a current CU and stream-years with no estimate were removed; observed zeros were kept; each stream was checked to have one estimate per year and a single CU and location.
 - **Trend model:** for each CU, 1995 to 2024, using streams with at least 5 years of estimates:
-  - 3 or more streams: `lme4::lmer(log(spawners + 1) ~ year + (1 + year | stream))`, falling back to a random-intercept model if singular
+  - 3 or more streams: `lme4::lmer(log(spawners + 1) ~ year + (1 + year | stream))`, with year centred on 2010, falling back to a random-intercept model if singular
   - 1 or 2 streams: linear regression with a separate intercept per stream
   - The year slope is reported as an average percent change per year with a 95% confidence interval, and CUs are labelled Declining, Increasing, or No clear trend.
 

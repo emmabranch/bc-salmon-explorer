@@ -40,7 +40,7 @@ species_pal <- colorFactor(
 )
 trend_levels <- c("Declining", "No clear trend", "Increasing", "Not estimated")
 trend_pal <- colorFactor(
-  palette = c("#D55E00", "#999999", "#0072B2", "#DDDDDD"),
+  palette = c("#D55E00", "#999999", "#0072B2", "#E8E8E8"),  # "Not estimated" is pale fill with a dark outline
   levels  = trend_levels
 )
 
@@ -124,32 +124,43 @@ server <- function(input, output, session) {
   output$map <- renderLeaflet({
     leaflet(options = leafletOptions(preferCanvas = TRUE)) |>
       addProviderTiles(providers$Esri.WorldGrayCanvas) |>
-      setView(lng = -126, lat = 54, zoom = 5)
+      # Open on BC, not the empty parts of Alberta and Alaska
+      fitBounds(lng1 = -133.5, lat1 = 48.2, lng2 = -117, lat2 = 57.5)
   })
 
   observe({
     d <- filtered_streams()
     by_trend <- input$colour_by == "trend"
 
-    map <- leafletProxy("map") |> clearMarkers() |> clearControls()
+    map <- leafletProxy("map") |>
+      clearMarkers() |>
+      clearMarkerClusters() |>
+      clearControls()
 
+    # opacity = 1 makes the legend swatches match the points
     map <- if (by_trend) {
       addLegend(map, "bottomright", pal = trend_pal, values = trend_levels,
-                title = trend_label)
+                title = trend_label, opacity = 1)
     } else {
       addLegend(map, "bottomright", pal = species_pal, values = species_choices,
-                title = "Species")
+                title = "Species", opacity = 1)
     }
 
     if (nrow(d) == 0) return()
 
     fill <- if (by_trend) trend_pal(d$trend_class) else species_pal(as.character(d$species))
 
+    # Cluster overlapping points in species view; clusters split apart at zoom 8.
+    # Trend view stays unclustered so the trend colours are always visible.
+    clusters <- if (by_trend) NULL else markerClusterOptions(disableClusteringAtZoom = 8)
+
     map |>
       addCircleMarkers(
         data = d, lng = ~lon, lat = ~lat,
-        radius = 4, stroke = FALSE, fillOpacity = 0.7,
-        fillColor = fill,
+        radius = 3, fillOpacity = 0.8, fillColor = fill,
+        # thin dark outline keeps pale points visible on the grey basemap
+        stroke = TRUE, color = "#444444", weight = 0.5, opacity = 0.8,
+        clusterOptions = clusters,
         label = ~paste0(stream_name, " (", species, ")"),
         popup = ~paste0(
           "<b>", htmltools::htmlEscape(stream_name), "</b><br>",

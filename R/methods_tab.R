@@ -67,7 +67,7 @@ methods_tab_ui <- function(n_streams, n_cus, n_obs, year_min, year_max, trend_se
         tags$ul(
           tags$li(strong("CUs with 3 or more streams: "), "a linear mixed-effects model (lme4), ",
                   code("log(spawners + 1) ~ year + (1 + year | stream)"),
-                  ". Each stream has its own baseline and slope, and the fixed year effect is the CU-level trend. ",
+                  ", with year centred on 2010 to help the models converge. Each stream has its own baseline and slope, and the fixed year effect is the CU-level trend. ",
                   "If that model is singular, a random-intercept-only model is used."),
           tags$li(strong("CUs with 1 or 2 streams: "), "ordinary linear regression, with a separate intercept for each stream.")
         ),
