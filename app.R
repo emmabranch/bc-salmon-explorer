@@ -7,6 +7,8 @@ library(shiny)
 library(bslib)
 library(leaflet)
 library(dplyr)
+library(ggplot2)
+library(plotly)
 
 # ---- Data -----------------------------------------------------------------
 
@@ -14,15 +16,32 @@ salmon  <- readRDS("data/salmon_app.rds")
 streams <- salmon$streams
 counts  <- salmon$counts
 
+trend_file     <- readRDS("data/cu_trends.rds")
+cu_trends      <- trend_file$trends
+trend_settings <- trend_file$settings
+trend_label    <- paste0("CU trend (", trend_settings$trend_start, " to ",
+                         trend_settings$trend_end, ")")
+
+# Add each stream's CU trend class, for colouring the map
+streams <- streams |>
+  left_join(select(cu_trends, cuid, trend_class), by = "cuid") |>
+  mutate(trend_class = as.character(trend_class),
+         trend_class = ifelse(is.na(trend_class), "Not estimated", trend_class))
+
 species_choices <- sort(unique(as.character(streams$species)))
 region_choices  <- sort(unique(as.character(streams$region)))
 year_min <- min(counts$year)
 year_max <- max(counts$year)
 
-# Colour-blind-friendly palette (Okabe-Ito), one colour per species
+# Colour-blind-friendly palettes (Okabe-Ito)
 species_pal <- colorFactor(
   palette = c("#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#D55E00"),
   levels  = species_choices
+)
+trend_levels <- c("Declining", "No clear trend", "Increasing", "Not estimated")
+trend_pal <- colorFactor(
+  palette = c("#D55E00", "#999999", "#0072B2", "#DDDDDD"),
+  levels  = trend_levels
 )
 
 # ---- UI -------------------------------------------------------------------
@@ -47,10 +66,15 @@ ui <- page_sidebar(
 
   navset_card_tab(
     nav_panel("Map",
+              radioButtons("colour_by", "Colour points by",
+                           choices = c("Species" = "species",
+                                       setNames("trend", trend_label)),
+                           inline = TRUE),
               leafletOutput("map", height = 600),
               textOutput("n_streams")),
     nav_panel("Trends",
-              p("Coming next: spawner abundance over time and mixed-effects trend estimates.")),
+              uiOutput("trend_summary"),
+              uiOutput("trend_plot_ui")),
     nav_panel("Methods and data quality",
               p("Coming soon."))
   )
@@ -88,32 +112,44 @@ server <- function(input, output, session) {
              streamid %in% active$streamid)
   })
 
-  # Base map, drawn once
+  # ---- Map ----
+
   output$map <- renderLeaflet({
     leaflet(options = leafletOptions(preferCanvas = TRUE)) |>
       addProviderTiles(providers$Esri.WorldGrayCanvas) |>
-      setView(lng = -126, lat = 54, zoom = 5) |>
-      addLegend("bottomright", pal = species_pal,
-                values = species_choices, title = "Species")
+      setView(lng = -126, lat = 54, zoom = 5)
   })
 
-  # Redraw the points whenever the filters change
   observe({
     d <- filtered_streams()
-    map <- leafletProxy("map") |> clearMarkers()
+    by_trend <- input$colour_by == "trend"
+
+    map <- leafletProxy("map") |> clearMarkers() |> clearControls()
+
+    map <- if (by_trend) {
+      addLegend(map, "bottomright", pal = trend_pal, values = trend_levels,
+                title = trend_label)
+    } else {
+      addLegend(map, "bottomright", pal = species_pal, values = species_choices,
+                title = "Species")
+    }
+
     if (nrow(d) == 0) return()
+
+    fill <- if (by_trend) trend_pal(d$trend_class) else species_pal(as.character(d$species))
 
     map |>
       addCircleMarkers(
         data = d, lng = ~lon, lat = ~lat,
         radius = 4, stroke = FALSE, fillOpacity = 0.7,
-        fillColor = ~species_pal(as.character(species)),
+        fillColor = fill,
         label = ~paste0(stream_name, " (", species, ")"),
         popup = ~paste0(
           "<b>", htmltools::htmlEscape(stream_name), "</b><br>",
           species, "<br>",
           "CU: ", htmltools::htmlEscape(cu_name), "<br>",
           "Region: ", region, "<br>",
+          "CU trend: ", trend_class, "<br>",
           "Years with estimates: ", n_years,
           " (", first_year, " to ", last_year, ")"
         )
@@ -122,6 +158,109 @@ server <- function(input, output, session) {
 
   output$n_streams <- renderText({
     paste(format(nrow(filtered_streams()), big.mark = ","), "streams shown")
+  })
+
+  # ---- Trends ----
+
+  selected_trend <- reactive({
+    req(input$cu != "")
+    filter(cu_trends, cuid == as.numeric(input$cu))
+  })
+
+  # All CU trends matching the species and region filters (overview view)
+  filtered_trends <- reactive({
+    cu_trends |>
+      filter(species %in% input$species,
+             input$region == "" | region == input$region)
+  })
+
+  output$trend_summary <- renderUI({
+    if (input$cu == "") {
+      n <- nrow(filtered_trends())
+      return(p(
+        sprintf("Average %% change per year in spawner abundance, %d to %d, for the %d CUs matching your filters. ",
+                trend_settings$trend_start, trend_settings$trend_end, n),
+        em("Lines show 95% confidence intervals. Choose a Conservation Unit in the sidebar to see its streams.")
+      ))
+    }
+    tr <- selected_trend()
+    if (nrow(tr) == 0) {
+      return(p(em("Not enough data to estimate a trend for this CU in ",
+                  trend_settings$trend_start, " to ", trend_settings$trend_end, ".")))
+    }
+    p(
+      strong(paste0(tr$trend_class, ": ")),
+      sprintf("%+.1f%% per year (95%% CI %+.1f%% to %+.1f%%), ",
+              tr$pct_change, tr$pct_low, tr$pct_high),
+      sprintf("%d to %d, based on %d streams and %d annual estimates. ",
+              trend_settings$trend_start, trend_settings$trend_end,
+              tr$n_streams, tr$n_obs),
+      em(tr$method, ".")
+    )
+  })
+
+  # Taller plot area for the overview, so every CU gets its own row
+  output$trend_plot_ui <- renderUI({
+    h <- if (input$cu == "") max(400, 16 * nrow(filtered_trends())) else 500
+    plotlyOutput("trend_plot", height = paste0(h, "px"))
+  })
+
+  output$trend_plot <- renderPlotly({
+
+    # Overview: one row per CU, ordered by estimated trend
+    if (input$cu == "") {
+      d <- filtered_trends()
+      req(nrow(d) > 0)
+      d <- d |>
+        mutate(label = make.unique(paste0(cu_name, " (", species_qualified, ")")),
+               label = reorder(label, pct_change),
+               text  = sprintf("%s<br>%+.1f%% per year (%+.1f to %+.1f)<br>%d streams",
+                               label, pct_change, pct_low, pct_high, n_streams))
+
+      p <- ggplot(d, aes(pct_change, label, colour = trend_class, text = text)) +
+        geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
+        geom_linerange(aes(xmin = pct_low, xmax = pct_high)) +
+        geom_point(size = 1.8) +
+        scale_colour_manual(values = c("Declining" = "#D55E00",
+                                       "No clear trend" = "#999999",
+                                       "Increasing" = "#0072B2"),
+                            name = NULL) +
+        coord_cartesian(xlim = c(-25, 25)) +
+        labs(x = "% change per year", y = NULL) +
+        theme_minimal(base_size = 11) +
+        theme(axis.text.y = element_text(size = 8))
+
+      return(ggplotly(p, tooltip = "text"))
+    }
+
+    # Single CU: every stream's counts, plus the CU-level trend line
+    cu_counts <- counts |>
+      inner_join(select(filter(streams, cuid == as.numeric(input$cu)),
+                        streamid, stream_name),
+                 by = "streamid") |>
+      filter(between(year, input$years[1], input$years[2]))
+    req(nrow(cu_counts) > 0)
+
+    p <- ggplot(cu_counts, aes(year, spawners, group = streamid,
+                               text = paste0(stream_name, "<br>", year, ": ",
+                                             format(spawners, big.mark = ",")))) +
+      geom_line(colour = "grey70", linewidth = 0.4) +
+      geom_point(colour = "grey50", size = 0.8) +
+      scale_y_continuous(transform = "log1p", labels = scales::comma) +
+      labs(x = NULL, y = "Spawners (log scale)") +
+      theme_minimal(base_size = 13)
+
+    # Overlay the CU-level trend line, drawn through the mean of the model data
+    tr <- selected_trend()
+    if (nrow(tr) == 1) {
+      line <- tibble(year = trend_settings$trend_start:trend_settings$trend_end) |>
+        mutate(year_c   = year - trend_settings$centre_year,
+               spawners = expm1(tr$mean_log + tr$slope * (year_c - tr$mean_year_c)))
+      p <- p + geom_line(data = line, aes(year, spawners), inherit.aes = FALSE,
+                         colour = "#0072B2", linewidth = 1.2)
+    }
+
+    ggplotly(p, tooltip = "text")
   })
 }
 
