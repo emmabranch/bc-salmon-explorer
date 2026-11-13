@@ -48,3 +48,11 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Raw data: too large for GitHub, download from Zenodo (see data-raw/README.md)
+data-raw/*.csv
+!data-raw/README.md
+
+# Deployment and secrets
+rsconnect/
+.Renviron
