@@ -61,7 +61,9 @@ methods_tab_ui <- function(n_streams, n_cus, n_obs, year_min, year_max, trend_se
       bslib::accordion_panel(
         "Trend model",
         p(sprintf("Trends are estimated separately for each CU over %d to %d, using streams with at least %d years of estimates in that window.",
-                  ts$trend_start, ts$trend_end, ts$min_years)),
+                  ts$trend_start, ts$trend_end, ts$min_years),
+          " The window starts in 1995, when DFO moved salmon enumeration to its Science section and began ",
+          "recording how each estimate was made, and covers roughly six to seven salmon generations."),
         tags$ul(
           tags$li(strong("CUs with 3 or more streams: "), "a linear mixed-effects model (lme4), ",
                   code("log(spawners + 1) ~ year + (1 + year | stream)"),
@@ -88,7 +90,10 @@ methods_tab_ui <- function(n_streams, n_cus, n_obs, year_min, year_max, trend_se
                   "and monitoring effort has declined in recent decades (see the chart on this page). Stream-level ",
                   "random effects reduce, but do not remove, the bias this can cause."),
           tags$li(strong("Survey quality is mostly unknown. "), "PSF's survey quality rating, based on DFO's estimate ",
-                  "classification, is 'Unknown' for most stream-years, so quality cannot be used to filter the data reliably."),
+                  "classification, is 'Unknown' for most stream-years, so quality cannot be used to filter the data reliably. ",
+                  "This largely reflects history: DFO notes that before 1995 the database stored only one summary estimate ",
+                  "per population, without the number of observations or the method used, and many of these older ",
+                  "estimates are labelled 'Unspecified Returns'."),
           tags$li(strong("Mixed measures. "), "The abundance field can include total returns as well as spawners (see above)."),
           tags$li(strong("Log transformation. "), "Using log(spawners + 1) handles zero counts, but compresses ",
                   "differences between small counts."),
@@ -105,8 +110,12 @@ methods_tab_ui <- function(n_streams, n_cus, n_obs, year_min, year_max, trend_se
                   "Zenodo. ", a("https://doi.org/10.5281/zenodo.19959144",
                                 href = "https://doi.org/10.5281/zenodo.19959144", target = "_blank"),
                   ". Licensed under CC BY 4.0."),
-          tags$li("Fisheries and Oceans Canada. New Salmon Escapement Database System (NuSEDS). ",
-                  "Contains information licensed under the Open Government Licence - Canada.")
+          tags$li("Fisheries and Oceans Canada. NuSEDS - New Salmon Escapement Database System. ",
+                  "Open Government Portal. ",
+                  a("https://open.canada.ca/data/en/dataset/c48669a3-045b-400d-b730-48aafe8c5ee6",
+                    href = "https://open.canada.ca/data/en/dataset/c48669a3-045b-400d-b730-48aafe8c5ee6",
+                    target = "_blank"),
+                  ". Contains information licensed under the Open Government Licence - Canada.")
         ),
         p("Data cleaning methods: Pacific Salmon Foundation, ",
           a("Pacific Salmon Explorer Technical Report, Appendix 2: NuSEDS Data Processing",
