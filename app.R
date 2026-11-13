@@ -28,6 +28,14 @@ streams <- streams |>
   mutate(trend_class = as.character(trend_class),
          trend_class = ifelse(is.na(trend_class), "Not estimated", trend_class))
 
+# Flag coordinates outside a generous BC, Yukon, and transboundary box.
+# These are kept in the trends but left off the map (see Methods tab).
+streams <- streams |>
+  mutate(coords_ok = between(lon, -142, -110) & between(lat, 45, 70))
+map_bounds <- streams |>
+  filter(coords_ok) |>
+  summarise(lng1 = min(lon), lat1 = min(lat), lng2 = max(lon), lat2 = max(lat))
+
 species_choices <- sort(unique(as.character(streams$species)))
 region_choices  <- sort(unique(as.character(streams$region)))
 year_min <- min(counts$year)
@@ -66,6 +74,8 @@ ui <- page_sidebar(
 
   navset_card_tab(
     nav_panel("Map",
+              # Space out the inline radio buttons
+              tags$style(".radio-inline, .form-check-inline { margin-right: 1.5rem; }"),
               radioButtons("colour_by", "Colour points by",
                            choices = c("Species" = "species",
                                        setNames("trend", trend_label)),
@@ -124,12 +134,14 @@ server <- function(input, output, session) {
   output$map <- renderLeaflet({
     leaflet(options = leafletOptions(preferCanvas = TRUE)) |>
       addProviderTiles(providers$Esri.WorldGrayCanvas) |>
-      # Open on BC, not the empty parts of Alberta and Alaska
-      fitBounds(lng1 = -133.5, lat1 = 48.2, lng2 = -117, lat2 = 57.5)
+      # Open on the full extent of the streams, with a little padding at the edges
+      fitBounds(lng1 = map_bounds$lng1, lat1 = map_bounds$lat1,
+                lng2 = map_bounds$lng2, lat2 = map_bounds$lat2,
+                options = list(padding = c(20, 20)))
   })
 
   observe({
-    d <- filtered_streams()
+    d <- filter(filtered_streams(), coords_ok)
     by_trend <- input$colour_by == "trend"
 
     map <- leafletProxy("map") |>
@@ -175,7 +187,10 @@ server <- function(input, output, session) {
   })
 
   output$n_streams <- renderText({
-    paste(format(nrow(filtered_streams()), big.mark = ","), "streams shown")
+    d <- filtered_streams()
+    n_bad <- sum(!d$coords_ok)
+    paste0(format(sum(d$coords_ok), big.mark = ","), " streams shown",
+           if (n_bad > 0) paste0(" (", n_bad, " not mapped: implausible coordinates)") else "")
   })
 
   # ---- Trends ----
