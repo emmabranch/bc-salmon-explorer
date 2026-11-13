@@ -132,7 +132,10 @@ server <- function(input, output, session) {
   # ---- Map ----
 
   output$map <- renderLeaflet({
-    leaflet(options = leafletOptions(preferCanvas = TRUE)) |>
+    # zoomSnap = 0.25 lets fitBounds() use quarter zoom steps, so the map fits
+    # the data closely instead of jumping out a whole level (4x the area)
+    leaflet(options = leafletOptions(preferCanvas = TRUE,
+                                     zoomSnap = 0.25, zoomDelta = 0.5)) |>
       addProviderTiles(providers$Esri.WorldGrayCanvas) |>
       # Open on the full extent of the streams, with a little padding at the edges
       fitBounds(lng1 = map_bounds$lng1, lat1 = map_bounds$lat1,
