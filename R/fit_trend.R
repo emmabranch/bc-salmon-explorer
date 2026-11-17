@@ -51,6 +51,7 @@ fit_trend <- function(d) {
     pct_low     = 100 * (exp(slope - 1.96 * se) - 1),
     pct_high    = 100 * (exp(slope + 1.96 * se) - 1),
     n_streams   = n_streams,
+    n_years     = dplyr::n_distinct(d$year),   # used for the low-data flag
     n_obs       = nrow(d),
     mean_log    = mean(d$log_spawners),   # used to draw the trend line
     mean_year_c = mean(d$year_c),
