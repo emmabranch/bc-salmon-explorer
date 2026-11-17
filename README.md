@@ -2,6 +2,8 @@
 
 An interactive R Shiny app for exploring spawner abundance and recent trends for Pacific salmon in British Columbia and the Yukon, using the Pacific Salmon Foundation's cleaned NuSEDS spawner survey data.
 
+Companion project: [BC lightstation sea temperatures](https://emmabranch.github.io/bc-lightstation-qc/), quality-controlled ocean temperature data for the same coast.
+
 **Live app:** https://emmabranch.shinyapps.io/bc-salmon-explorer/
 
 ![Screenshot of the BC Salmon Explorer map](docs/screenshot.png)
