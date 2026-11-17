@@ -74,7 +74,42 @@ methods_tab_ui <- function(n_streams, n_cus, n_obs, year_min, year_max, trend_se
         p("The slope is converted to an average percent change per year, 100 * (exp(slope) - 1), with a 95% Wald ",
           "confidence interval. CUs are labelled ", em("Declining"), " if the whole interval is below zero, ",
           em("Increasing"), " if it is above zero, and ", em("No clear trend"), " otherwise."),
-        p("The code is in ", code("R/fit_trend.R"), " and ", code("scripts/02_trends.R"), ".")
+        p(strong("Low-data flag: "),
+          sprintf("trends based on fewer than %d distinct years of estimates (out of %d possible) are marked ",
+                  ts$low_data_years, ts$trend_end - ts$trend_start + 1),
+          em("Low data"), ". In the Trends tab they are shown with hollow points and dashed lines, and ",
+          "labelled in the table, because a slope fitted to a handful of years can be driven by one or two ",
+          "unusual returns."),
+        p("The code is in ", code("R/fit_trend.R"), " and ", code("scripts/02_trends.R"), ". ",
+          "The trend function has unit tests (", code("tests/testthat/"), ") that check, on simulated data with ",
+          "known trends, that it recovers the true slope, chooses the right model, and falls back correctly ",
+          "when the random-slope model is singular.")
+      ),
+
+      bslib::accordion_panel(
+        "Sensitivity check: autocorrelation",
+        p("The main models assume each year's count is independent of the last, but salmon returns in ",
+          "neighbouring years are correlated. Ignoring this usually makes confidence intervals too narrow. ",
+          "To check how much this matters, the 140 CUs with 3 or more streams were refitted in glmmTMB with ",
+          "and without first-order autoregressive (AR(1)) errors within each stream. Both models converged ",
+          "for 127 CUs."),
+        tags$ul(
+          tags$li(strong("Autocorrelation is strong: "),
+                  "the median correlation between consecutive years (phi) was 0.75."),
+          tags$li(strong("It widens intervals, not trends: "),
+                  "compared with the same model without AR(1) errors, accounting for autocorrelation widened ",
+                  "confidence intervals by a median of 58% but barely changed the trend estimates (r = 0.97; ",
+                  "median difference 0.4 percentage points per year). 24% of CUs moved to a different label, ",
+                  "almost all to ", em("No clear trend"), "."),
+          tags$li(strong("The app's models are largely robust: "),
+                  "the random-slope models used in the app already gave intervals about as wide as the AR(1) ",
+                  "models (median ratio of standard errors 0.99), and 86% of CUs kept the same label. The ",
+                  "labels that changed were spread evenly across model types (about 1 in 7), suggesting they ",
+                  "are CUs near a category boundary.")
+        ),
+        p("CUs with 1 or 2 streams, which use simple regression, could not be included in this check. Their ",
+          "intervals are likely too narrow, so their trend labels should be read with caution. ",
+          "The code is in ", code("scripts/03_ar1_sensitivity.R"), ".")
       ),
 
       bslib::accordion_panel(
@@ -83,9 +118,9 @@ methods_tab_ui <- function(n_streams, n_cus, n_obs, year_min, year_max, trend_se
           tags$li(strong("Not a status assessment. "), "A trend label describes the direction of change in survey ",
                   "estimates. It is not a biological status assessment, which compares abundance with benchmarks ",
                   "(as in the Pacific Salmon Explorer or COSEWIC assessments)."),
-          tags$li(strong("Confidence intervals are probably too narrow. "), "The models assume independent errors, ",
-                  "but abundance in neighbouring years is correlated. Adding an autoregressive error term (for ",
-                  "example with glmmTMB) would be a natural next step."),
+          tags$li(strong("Autocorrelation. "), "The app's models assume independent errors, but abundance in ",
+                  "neighbouring years is correlated. A sensitivity check (see above) found the mixed models ",
+                  "largely robust to this, but intervals for CUs with 1 or 2 streams are likely too narrow."),
           tags$li(strong("Survey coverage changes over time. "), "Which streams are surveyed varies from year to year, ",
                   "and monitoring effort has declined in recent decades (see the chart on this page). Stream-level ",
                   "random effects reduce, but do not remove, the bias this can cause."),
