@@ -2,15 +2,17 @@
 
 An interactive R Shiny app for exploring spawner abundance and recent trends for Pacific salmon in British Columbia and the Yukon, using the Pacific Salmon Foundation's cleaned NuSEDS spawner survey data.
 
-Companion project: [BC lightstation sea temperatures](https://emmabranch.github.io/bc-lightstation-qc/), quality-controlled ocean temperature data for the same coast.
+**Live app:** https://emmabranch.shinyapps.io/bc-salmon-explorer/ · **More projects:** [github.com/emmabranch](https://github.com/emmabranch)
 
-**Live app:** https://emmabranch.shinyapps.io/bc-salmon-explorer/
+Companion project: [BC lightstation sea temperatures](https://emmabranch.github.io/bc-lightstation-qc/), quality-controlled ocean temperature data for the same coast.
 
 ![Screenshot of the BC Salmon Explorer map](docs/screenshot.png)
 
+> This is an independent portfolio project. It is not produced or endorsed by the Pacific Salmon Foundation or Fisheries and Oceans Canada.
+
 ## What it does
 
-- **A data banner** with headline figures and a stripe ribbon of monitoring effort since 1950 (one stripe per year), showing how the number of surveyed streams has changed
+- **A headline banner** with key figures, and background stripes showing monitoring effort since 1950 (one stripe per year), so you can see how the number of surveyed streams has changed
 - **Map** of about 7,000 survey streams, coloured by species or by the estimated recent trend of their Conservation Unit (CU)
 - **Filters** for species, region, Conservation Unit, and year range
 - **Trends tab:**
@@ -19,15 +21,13 @@ Companion project: [BC lightstation sea temperatures](https://emmabranch.github.
   - a table of CU trend estimates, with low-data trends flagged as less reliable
 - **Methods and data quality tab** explaining the data, cleaning steps, model, and limitations, with charts of survey coverage and survey quality over time
 
-## Data
+## Data and licences
 
 - Carturan, B. & Peacock, S. (2026). *Cleaned spawner survey data* (v4). Pacific Salmon Foundation. Zenodo. https://doi.org/10.5281/zenodo.19959144. Licensed under CC BY 4.0.
 - Derived from Fisheries and Oceans Canada. *NuSEDS - New Salmon Escapement Database System*. Open Government Portal. https://open.canada.ca/data/en/dataset/c48669a3-045b-400d-b730-48aafe8c5ee6. Contains information licensed under the Open Government Licence - Canada.
 - Cleaning methods: Pacific Salmon Foundation, [Pacific Salmon Explorer Technical Report, Appendix 2](https://salmonexplorer.ca/methods/appendix-2.html).
 
 The raw file (about 300 MB) is not stored in this repository. See [`data-raw/README.md`](data-raw/README.md) for download instructions. The app uses two small processed files in `data/` (under 1 MB in total), shared under the same CC BY 4.0 terms with attribution as above.
-
-This is an independent portfolio project. It is not produced or endorsed by the Pacific Salmon Foundation or Fisheries and Oceans Canada.
 
 ## Methods in brief
 
@@ -58,30 +58,13 @@ Run them from the project root with:
 testthat::test_dir("tests/testthat")
 ```
 
-## Limitations
-
-- Trend labels describe change in survey estimates. They are **not biological status assessments**.
-- The app's models assume independent errors. The sensitivity check above found the mixed models largely robust to this, but intervals for CUs with 1 or 2 streams are likely too narrow.
-- Survey coverage varies over time, and monitoring effort has declined in recent decades.
-- Survey quality is unknown for most estimates, especially before 1995.
-- `MAX_ESTIMATE` can reflect total returns as well as spawners.
-
-Full details are in the app's Methods and data quality tab.
-
-## Next steps
-
-Code review suggested an AR(1) sensitivity check and unit tests for `fit_trend()`; both are now done (see above). Possible further work:
-
-- Extend the autocorrelation check to CUs with 1 or 2 streams, for example with `nlme::gls()` and an AR(1) correlation structure.
-- Show the AR(1) results in the app, for example as a toggle on the Trends tab.
-- Run the tests automatically on every push with GitHub Actions.
-
 ## Repository structure
 
 ```
 bc-salmon-explorer/
 ├── app.R                 # Shiny app (UI and server)
 ├── R/
+│   ├── app_theme.R       # Look and feel: colours, fonts, banner, and footer
 │   ├── fit_trend.R       # Trend model for one CU (used by the app and scripts)
 │   └── methods_tab.R     # Methods and data quality tab content
 ├── scripts/
@@ -101,7 +84,7 @@ bc-salmon-explorer/
 └── renv.lock             # Package versions (renv)
 ```
 
-## Reproducing the analysis
+## How to reproduce
 
 1. Clone this repository and open `bc-salmon-explorer.Rproj` in RStudio.
 2. Run `renv::restore()` to install the package versions used.
@@ -112,6 +95,26 @@ bc-salmon-explorer/
 
 Built with R 4.6, shiny, bslib, leaflet, dplyr, ggplot2, plotly, lme4, glmmTMB, and testthat. Deployed with rsconnect to shinyapps.io. Developed in RStudio with Git for version control and GitHub Copilot for code suggestions.
 
-## Author
+## Limitations
 
-Emma Branch, PhD candidate in epidemiology, University of British Columbia.
+- Trend labels describe change in survey estimates. They are **not biological status assessments**.
+- The app's models assume independent errors. The sensitivity check above found the mixed models largely robust to this, but intervals for CUs with 1 or 2 streams are likely too narrow.
+- Survey coverage varies over time, and monitoring effort has declined in recent decades.
+- Survey quality is unknown for most estimates, especially before 1995.
+- `MAX_ESTIMATE` can reflect total returns as well as spawners.
+
+Full details are in the app's Methods and data quality tab.
+
+## Next steps
+
+Code review suggested an AR(1) sensitivity check and unit tests for `fit_trend()`; both are now done (see above). Possible further work:
+
+- Extend the autocorrelation check to CUs with 1 or 2 streams, for example with `nlme::gls()` and an AR(1) correlation structure.
+- Show the AR(1) results in the app, for example as a toggle on the Trends tab.
+- Run the tests automatically on every push with GitHub Actions.
+
+## About me
+
+I'm Emma Branch, an epidemiologist and data analyst in British Columbia, and a PhD candidate in Population and Public Health at the University of British Columbia. I've spent about 10 years working with health research data, including registry analytics, REDCap database design, data governance, and performance measurement. I mostly work in R, SAS, and SQL, and build reports and tools with Quarto, Shiny, leaflet, and Power BI. Lately I've been applying the same habits to environmental and ocean data, mostly because I like maps and fish.
+
+[More projects](https://github.com/emmabranch) · [LinkedIn](https://www.linkedin.com/in/embranch/) · emma.branch@gmail.com
