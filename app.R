@@ -19,6 +19,11 @@ counts  <- salmon$counts
 trend_file     <- readRDS("data/cu_trends.rds")
 cu_trends      <- trend_file$trends
 trend_settings <- trend_file$settings
+
+# The low-data flag needs the newer trend file
+if (!"low_data" %in% names(cu_trends)) {
+  stop("data/cu_trends.rds is out of date: rerun scripts/02_trends.R")
+}
 trend_label    <- paste0("CU trend (", trend_settings$trend_start, " to ",
                          trend_settings$trend_end, ")")
 
@@ -55,8 +60,10 @@ trend_pal <- colorFactor(
 # ---- UI -------------------------------------------------------------------
 
 ui <- page_sidebar(
-  title = "BC Salmon Explorer",
-  theme = bs_theme(version = 5, bootswatch = "flatly"),
+  title = div(class = "app-title", "🐟 BC Salmon Explorer",
+              span(class = "app-subtitle", "Spawner surveys and population trends")),
+  window_title = "BC Salmon Explorer",
+  theme = app_theme,   # fonts, colours, and styles are in R/app_theme.R
 
   sidebar = sidebar(
     checkboxGroupInput("species", "Species",
@@ -72,10 +79,12 @@ ui <- page_sidebar(
                 sep = "")
   ),
 
+  app_head(),   # browser tab icon and extra CSS
+
   navset_card_tab(
+    id = "tabs",
     nav_panel("Map",
-              # Space out the inline radio buttons
-              tags$style(".radio-inline, .form-check-inline { margin-right: 1.5rem; }"),
+              hero_banner(streams, counts, cu_trends, trend_settings),
               radioButtons("colour_by", "Colour points by",
                            choices = c("Species" = "species",
                                        setNames("trend", trend_label)),
@@ -84,7 +93,11 @@ ui <- page_sidebar(
               textOutput("n_streams")),
     nav_panel("Trends",
               uiOutput("trend_summary"),
-              uiOutput("trend_plot_ui")),
+              uiOutput("trend_plot_ui"),
+              h5("CU trend estimates", class = "section-title"),
+              p(em("Trends marked ", strong("Low data"), " are based on fewer than ",
+                   trend_settings$low_data_years, " years of estimates and are less reliable.")),
+              tableOutput("trend_table")),
     nav_panel("Methods and data quality",
               methods_tab_ui(
                 n_streams      = nrow(streams),
@@ -101,6 +114,10 @@ ui <- page_sidebar(
 
 server <- function(input, output, session) {
 
+  # Banner buttons switch tabs
+  observeEvent(input$go_trends,  nav_select("tabs", "Trends"))
+  observeEvent(input$go_methods, nav_select("tabs", "Methods and data quality"))
+
   # CU choices depend on the species and region selected
   observe({
     cus <- streams |>
@@ -109,8 +126,13 @@ server <- function(input, output, session) {
       distinct(cuid, cu_name, species) |>
       arrange(cu_name)
 
-    choices <- c("All CUs" = "",
-                 setNames(cus$cuid, paste0(cus$cu_name, " (", cus$species, ")")))
+    # Guard: with no CUs left (e.g. no species ticked), paste0() would return
+    # one stray label for zero CUs and setNames() would error
+    choices <- c("All CUs" = "")
+    if (nrow(cus) > 0) {
+      choices <- c(choices,
+                   setNames(cus$cuid, paste0(cus$cu_name, " (", cus$species, ")")))
+    }
 
     keep <- if (isTRUE(input$cu %in% cus$cuid)) input$cu else ""
     updateSelectInput(session, "cu", choices = choices, selected = keep)
@@ -118,6 +140,9 @@ server <- function(input, output, session) {
 
   # Streams matching the filters, with at least one estimate in the year range
   filtered_streams <- reactive({
+    # Wait until the inputs exist (they are briefly NULL while the app starts)
+    req(input$years, !is.null(input$region), !is.null(input$cu))
+
     active <- counts |>
       filter(between(year, input$years[1], input$years[2])) |>
       distinct(streamid)
@@ -191,6 +216,9 @@ server <- function(input, output, session) {
 
   output$n_streams <- renderText({
     d <- filtered_streams()
+    if (nrow(d) == 0) {
+      return("No streams match these filters. Try selecting more species or widening the year range.")
+    }
     n_bad <- sum(!d$coords_ok)
     paste0(format(sum(d$coords_ok), big.mark = ","), " streams shown",
            if (n_bad > 0) paste0(" (", n_bad, " not mapped: implausible coordinates)") else "")
@@ -205,6 +233,7 @@ server <- function(input, output, session) {
 
   # All CU trends matching the species and region filters (overview view)
   filtered_trends <- reactive({
+    req(!is.null(input$region))
     cu_trends |>
       filter(species %in% input$species,
              input$region == "" | region == input$region)
@@ -216,7 +245,8 @@ server <- function(input, output, session) {
       return(p(
         sprintf("Average %% change per year in spawner abundance, %d to %d, for the %d CUs matching your filters. ",
                 trend_settings$trend_start, trend_settings$trend_end, n),
-        em("Lines show 95% confidence intervals. Choose a Conservation Unit in the sidebar to see its streams.")
+        em("Lines show 95% confidence intervals. Hollow points and dashed lines mark low-data trends. ",
+           "Choose a Conservation Unit in the sidebar to see its streams.")
       ))
     }
     tr <- selected_trend()
@@ -231,7 +261,14 @@ server <- function(input, output, session) {
       sprintf("%d to %d, based on %d streams and %d annual estimates. ",
               trend_settings$trend_start, trend_settings$trend_end,
               tr$n_streams, tr$n_obs),
-      em(tr$method, ".")
+      em(tr$method, "."),
+      if (tr$low_data) {
+        div(class = "alert alert-warning mt-2 mb-0",
+            strong("Low data: "),
+            sprintf("this trend is based on only %d years of estimates (fewer than %d), so treat it with caution. ",
+                    tr$n_years, trend_settings$low_data_years),
+            "The trend line is dashed.")
+      }
     )
   })
 
@@ -246,27 +283,50 @@ server <- function(input, output, session) {
     # Overview: one row per CU, ordered by estimated trend
     if (input$cu == "") {
       d <- filtered_trends()
-      req(nrow(d) > 0)
+      validate(need(nrow(d) > 0,
+                    "No CU trends match these filters. Try selecting more species or another region."))
       d <- d |>
         mutate(label = make.unique(paste0(cu_name, " (", species_qualified, ")")),
                label = reorder(label, pct_change),
-               text  = sprintf("%s<br>%+.1f%% per year (%+.1f to %+.1f)<br>%d streams",
-                               label, pct_change, pct_low, pct_high, n_streams))
+               reliability = factor(ifelse(low_data, "Low data", "Adequate data"),
+                                    levels = c("Adequate data", "Low data")),
+               text  = sprintf("%s<br>%+.1f%% per year (%+.1f to %+.1f)<br>%d streams, %d years%s",
+                               label, pct_change, pct_low, pct_high, n_streams, n_years,
+                               ifelse(low_data, "<br><b>Low data: less reliable</b>", "")))
 
+      # Low-data trends: hollow points and dashed interval lines
       p <- ggplot(d, aes(pct_change, label, colour = trend_class, text = text)) +
         geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
-        geom_linerange(aes(xmin = pct_low, xmax = pct_high)) +
-        geom_point(size = 1.8) +
+        geom_linerange(aes(xmin = pct_low, xmax = pct_high, linetype = reliability)) +
+        geom_point(aes(shape = reliability), size = 1.8) +
         scale_colour_manual(values = c("Declining" = "#D55E00",
                                        "No clear trend" = "#999999",
                                        "Increasing" = "#0072B2"),
                             name = NULL) +
+        scale_shape_manual(values = c("Adequate data" = 16, "Low data" = 1),
+                           name = NULL, drop = FALSE) +
+        scale_linetype_manual(values = c("Adequate data" = "solid", "Low data" = "dashed"),
+                              name = NULL, drop = FALSE) +
         coord_cartesian(xlim = c(-25, 25)) +
         labs(x = "% change per year", y = NULL) +
         theme_minimal(base_size = 11) +
         theme(axis.text.y = element_text(size = 8))
 
-      return(ggplotly(p, tooltip = "text"))
+      pl <- ggplotly(p, tooltip = "text")
+
+      # ggplotly names traces like "(Declining,Low data,1)". Keep just the trend
+      # class in the legend, and show each class once.
+      seen <- character(0)
+      for (i in seq_along(pl$x$data)) {
+        nm <- pl$x$data[[i]]$name
+        if (is.null(nm) || nm == "") next
+        clean <- sub("^\\(([^,]*),.*$", "\\1", nm)
+        pl$x$data[[i]]$name        <- clean
+        pl$x$data[[i]]$legendgroup <- clean
+        pl$x$data[[i]]$showlegend  <- !(clean %in% seen)
+        seen <- c(seen, clean)
+      }
+      return(pl |> layout(font = list(family = "Inter, sans-serif")))
     }
 
     # Single CU: every stream's counts, plus the CU-level trend line
@@ -275,7 +335,8 @@ server <- function(input, output, session) {
                         streamid, stream_name),
                  by = "streamid") |>
       filter(between(year, input$years[1], input$years[2]))
-    req(nrow(cu_counts) > 0)
+    validate(need(nrow(cu_counts) > 0,
+                  "This CU has no estimates in the selected years. Try widening the year range."))
 
     p <- ggplot(cu_counts, aes(year, spawners, group = streamid,
                                text = paste0(stream_name, "<br>", year, ": ",
@@ -293,16 +354,38 @@ server <- function(input, output, session) {
         mutate(year_c   = year - trend_settings$centre_year,
                spawners = expm1(tr$mean_log + tr$slope * (year_c - tr$mean_year_c)))
       p <- p + geom_line(data = line, aes(year, spawners), inherit.aes = FALSE,
-                         colour = "#0072B2", linewidth = 1.2)
+                         colour = "#0072B2", linewidth = 1.2,
+                         linetype = if (tr$low_data) "dashed" else "solid")
     }
 
     ggplotly(p, tooltip = "text")
   })
 
+  # Table of CU trends: the selected CU, or all CUs matching the filters
+  output$trend_table <- renderTable({
+    d <- if (input$cu == "") filtered_trends() else selected_trend()
+    validate(need(nrow(d) > 0, "No CU trends to show for these filters."))
+
+    d |>
+      arrange(pct_change) |>
+      transmute(
+        `Conservation Unit` = cu_name,
+        Species             = as.character(species),
+        Region              = as.character(region),
+        `% change per year` = sprintf("%+.1f", pct_change),
+        `95% CI`            = sprintf("%+.1f to %+.1f", pct_low, pct_high),
+        Trend               = as.character(trend_class),
+        Streams             = n_streams,
+        Years               = n_years,
+        Reliability         = ifelse(low_data, "Low data", "")
+      )
+  }, striped = TRUE, hover = TRUE, spacing = "s")
+
   # ---- Methods and data quality ----
 
   # Counts for the species and region filters (CU filter ignored here)
   quality_counts <- reactive({
+    req(input$years, !is.null(input$region))
     ids <- streams |>
       filter(species %in% input$species,
              input$region == "" | region == input$region) |>
@@ -314,9 +397,9 @@ server <- function(input, output, session) {
 
   output$coverage_plot <- renderPlot({
     d <- quality_counts() |> count(year, name = "n_streams")
-    req(nrow(d) > 0)
+    validate(need(nrow(d) > 0, "No estimates match these filters."))
     ggplot(d, aes(year, n_streams)) +
-      geom_col(fill = "#56B4E9", width = 1) +
+      geom_col(fill = "#2471a3", width = 1) +
       labs(title = "Streams with an estimate, by year",
            x = NULL, y = "Streams") +
       theme_minimal(base_size = 13)
@@ -330,7 +413,7 @@ server <- function(input, output, session) {
                                      as.character(survey_quality)),
                               levels = quality_levels)) |>
       count(decade, quality)
-    req(nrow(d) > 0)
+    validate(need(nrow(d) > 0, "No estimates match these filters."))
     ggplot(d, aes(factor(decade), n, fill = quality)) +
       geom_col(position = "fill") +
       scale_y_continuous(labels = scales::percent) +

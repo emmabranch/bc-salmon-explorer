@@ -21,6 +21,7 @@ trend_start <- 1995   # roughly 6 to 7 salmon generations
 trend_end   <- 2024
 min_years   <- 5      # a stream needs this many years of estimates to be used
 centre_year <- 2010   # centring year makes the intercepts interpretable
+low_data_years <- 10  # CU trends based on fewer distinct years than this are flagged
 
 # ---- Model data -----------------------------------------------------------
 
@@ -61,13 +62,16 @@ cu_trends <- model_data |>
       TRUE         ~ "No clear trend"
     ),
     trend_class = factor(trend_class,
-                         levels = c("Declining", "No clear trend", "Increasing"))
+                         levels = c("Declining", "No clear trend", "Increasing")),
+    # Flag trends resting on only a few years of data as less reliable
+    low_data = n_years < low_data_years
   )
 
 # ---- Checks (paste this output) -------------------------------------------
 
 cu_trends |> count(trend_class)
 cu_trends |> count(method)
+cu_trends |> count(low_data)
 cu_trends |>
   group_by(species) |>
   summarise(cus = n(),
@@ -79,7 +83,8 @@ saveRDS(
   list(
     trends   = cu_trends,
     settings = list(trend_start = trend_start, trend_end = trend_end,
-                    min_years = min_years, centre_year = centre_year)
+                    min_years = min_years, centre_year = centre_year,
+                    low_data_years = low_data_years)
   ),
   "data/cu_trends.rds"
 )
