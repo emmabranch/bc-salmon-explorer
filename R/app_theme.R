@@ -254,7 +254,18 @@ app_css <- "
 /* ---------- Phones ---------- */
 @media (max-width: 575.98px) {
   /* The page flows top to bottom (main area, then filters, then footer) */
-  .bslib-page-main { display: block !important; height: auto !important; }
+  html, body.bslib-page-sidebar,
+  .bslib-page-main,
+  .bslib-page-main > .bslib-sidebar-layout,
+  .bslib-sidebar-layout > .main,
+  .bslib-sidebar-layout > .sidebar {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .eb-footer.eb-footer-page { position: relative; z-index: 30; }
 }
 @media (max-width: 900px) {
   .stat-row, .stat-row.lift { grid-template-columns: repeat(2, minmax(0, 1fr)); }
