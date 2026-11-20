@@ -8,6 +8,7 @@ An interactive R Shiny app for exploring spawner abundance and recent trends for
 
 ## What it does
 
+- **A data banner** with headline figures and a stripe ribbon of monitoring effort since 1950 (one stripe per year), showing how the number of surveyed streams has changed
 - **Map** of about 7,000 survey streams, coloured by species or by the estimated recent trend of their Conservation Unit (CU)
 - **Filters** for species, region, Conservation Unit, and year range
 - **Trends tab:**
