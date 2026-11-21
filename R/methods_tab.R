@@ -154,7 +154,7 @@ methods_tab_ui <- function(n_streams, n_cus, n_obs, year_min, year_max, trend_se
         ),
         p("Data cleaning methods: Pacific Salmon Foundation, ",
           a("Pacific Salmon Explorer Technical Report, Appendix 2: NuSEDS Data Processing",
-            href = "https://salmonexplorer.ca/methods/appendix-2.html", target = "_blank"), "."),
+            href = "https://www.salmonexplorer.ca/methods/appendix-2.html", target = "_blank"), "."),
         p("This app is an independent portfolio project. It is not produced or endorsed by the Pacific Salmon ",
           "Foundation or Fisheries and Oceans Canada.")
       )
