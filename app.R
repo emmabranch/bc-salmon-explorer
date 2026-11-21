@@ -285,13 +285,22 @@ server <- function(input, output, session) {
       d <- filtered_trends()
       validate(need(nrow(d) > 0,
                     "No CU trends match these filters. Try selecting more species or another region."))
+      # Shorten long CU names on the axis to suit the chart's width, so the
+      # labels never squeeze the chart. The full name is in the hover text.
+      plot_width <- session$clientData$output_trend_plot_width
+      narrow     <- !is.null(plot_width) && plot_width < 600
+      max_chars  <- if (is.null(plot_width)) 60 else max(16, min(60, floor(plot_width / 30)))
+      short_name <- function(x, n) ifelse(nchar(x) > n, paste0(trimws(substr(x, 1, n - 1)), "..."), x)
+
       d <- d |>
-        mutate(label = make.unique(paste0(cu_name, " (", species_qualified, ")")),
+        mutate(full_label = paste0(cu_name, " (", species_qualified, ")"),
+               label = paste0(short_name(as.character(cu_name), max_chars), " (", species_qualified, ")"),
+               label = make.unique(label, sep = " "),
                label = reorder(label, pct_change),
                reliability = factor(ifelse(low_data, "Low data", "Adequate data"),
                                     levels = c("Adequate data", "Low data")),
                text  = sprintf("%s<br>%+.1f%% per year (%+.1f to %+.1f)<br>%d streams, %d years%s",
-                               label, pct_change, pct_low, pct_high, n_streams, n_years,
+                               full_label, pct_change, pct_low, pct_high, n_streams, n_years,
                                ifelse(low_data, "<br><b>Low data: less reliable</b>", "")))
 
       # Low-data trends: hollow points and dashed interval lines
@@ -326,7 +335,14 @@ server <- function(input, output, session) {
         pl$x$data[[i]]$showlegend  <- !(clean %in% seen)
         seen <- c(seen, clean)
       }
-      return(pl |> layout(font = list(family = "Inter, sans-serif")))
+      pl <- pl |> layout(font = list(family = "Inter, sans-serif"))
+      # Phones: legend across the top, so the chart can use the full width
+      if (narrow) {
+        pl <- pl |> layout(legend = list(orientation = "h", x = 0, y = 1, yanchor = "bottom"),
+                           margin = list(l = 0, r = 5)) |>
+          config(displayModeBar = FALSE)
+      }
+      return(pl)
     }
 
     # Single CU: every stream's counts, plus the CU-level trend line
