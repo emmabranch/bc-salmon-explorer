@@ -314,7 +314,8 @@ app_footer <- function() {
         a(href = "https://emmabranch.shinyapps.io/bc-salmon-explorer", "BC Salmon Explorer"),
         a(href = "https://emmabranch.github.io/ontario-claims-caribou/", "Ontario mining claims and caribou"),
         a(href = "https://emmabranch.github.io/salish-sea-whales/", "Salish Sea whales"),
-        a(href = "https://emmabranch.github.io/bike-recall-surveillance/", "Bike recall surveillance")
+        a(href = "https://emmabranch.github.io/bike-recall-surveillance/", "Bike recall surveillance"),
+        a(href = "https://emmabranch.github.io/gravel-geometry/", "Gravel geometry explorer")
       ),
       shiny::div(
         class = "eb-footer-contact",
