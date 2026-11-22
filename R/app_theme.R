@@ -313,7 +313,8 @@ app_footer <- function() {
         a(href = "https://emmabranch.github.io/vch-climate-equity-profile/", "VCH climate equity profile"),
         a(href = "https://emmabranch.shinyapps.io/bc-salmon-explorer", "BC Salmon Explorer"),
         a(href = "https://emmabranch.github.io/ontario-claims-caribou/", "Ontario mining claims and caribou"),
-        a(href = "https://emmabranch.github.io/salish-sea-whales/", "Salish Sea whales")
+        a(href = "https://emmabranch.github.io/salish-sea-whales/", "Salish Sea whales"),
+        a(href = "https://emmabranch.github.io/bike-recall-surveillance/", "Bike recall surveillance")
       ),
       shiny::div(
         class = "eb-footer-contact",
