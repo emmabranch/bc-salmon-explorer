@@ -60,7 +60,9 @@ trend_pal <- colorFactor(
 # ---- UI -------------------------------------------------------------------
 
 ui <- page_sidebar(
-  title = div(class = "app-title", "🐟 BC Salmon Explorer",
+  title = div(class = "app-title",
+              tags$img(class = "app-logo", src = "motif.svg", alt = ""),
+              "BC Salmon Explorer",
               span(class = "app-subtitle", "Spawner surveys and population trends")),
   window_title = "BC Salmon Explorer",
   theme = app_theme,   # fonts, colours, and styles are in R/app_theme.R
@@ -335,7 +337,7 @@ server <- function(input, output, session) {
         pl$x$data[[i]]$showlegend  <- !(clean %in% seen)
         seen <- c(seen, clean)
       }
-      pl <- pl |> layout(font = list(family = "Inter, sans-serif"))
+      pl <- pl |> layout(font = list(family = "Bricolage Grotesque, sans-serif"))
       # Phones: legend across the top, so the chart can use the full width
       if (narrow) {
         pl <- pl |> layout(legend = list(orientation = "h", x = 0, y = 1, yanchor = "bottom"),
