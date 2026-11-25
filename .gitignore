@@ -55,3 +55,6 @@ data-raw/*.csv
 # Deployment and secrets
 rsconnect/
 .Renviron
+
+# macOS
+.DS_Store

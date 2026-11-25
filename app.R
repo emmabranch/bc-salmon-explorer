@@ -10,6 +10,11 @@ library(dplyr)
 library(ggplot2)
 library(plotly)
 
+# Shared chart style from the brand kit. R/theme_eb.R loads automatically (it is
+# in R/), and the fonts are bundled in fonts/ so they also work on shinyapps.io.
+# Charts use the white background because the app's panels are white cards.
+eb_use("bc-salmon-explorer", font_dir = "fonts")
+
 # ---- Data -----------------------------------------------------------------
 
 salmon  <- readRDS("data/salmon_app.rds")
@@ -46,14 +51,18 @@ region_choices  <- sort(unique(as.character(streams$region)))
 year_min <- min(counts$year)
 year_max <- max(counts$year)
 
-# Colour-blind-friendly palettes (Okabe-Ito)
+# Brand colours, checked for colourblind readers (they separate better than the
+# Okabe-Ito set this replaced). Species: Chinook cobalt, Chum kelp, Coho sunflower,
+# Pink lilac, Sockeye tomato.
+species_cols <- c(Chinook = "#2340FF", Chum = "#00B386", Coho = "#FFD23F",
+                  Pink = "#B9A4FF", Sockeye = "#FF5A36")
 species_pal <- colorFactor(
-  palette = c("#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#D55E00"),
+  palette = unname(species_cols[species_choices]),
   levels  = species_choices
 )
 trend_levels <- c("Declining", "No clear trend", "Increasing", "Not estimated")
 trend_pal <- colorFactor(
-  palette = c("#D55E00", "#999999", "#0072B2", "#E8E8E8"),  # "Not estimated" is pale fill with a dark outline
+  palette = c("#D93A16", "#8C8373", "#2340FF", "#F3EEE3"),  # "Not estimated" is paper with a dark outline
   levels  = trend_levels
 )
 
@@ -179,13 +188,13 @@ server <- function(input, output, session) {
       clearMarkerClusters() |>
       clearControls()
 
-    # opacity = 1 makes the legend swatches match the points
+    # opacity = 0.8 makes the legend swatches match the points
     map <- if (by_trend) {
       addLegend(map, "bottomright", pal = trend_pal, values = trend_levels,
-                title = trend_label, opacity = 1)
+                title = trend_label, opacity = 0.8)
     } else {
       addLegend(map, "bottomright", pal = species_pal, values = species_choices,
-                title = "Species", opacity = 1)
+                title = "Species", opacity = 0.8)
     }
 
     if (nrow(d) == 0) return()
@@ -201,7 +210,7 @@ server <- function(input, output, session) {
         data = d, lng = ~lon, lat = ~lat,
         radius = 3, fillOpacity = 0.8, fillColor = fill,
         # thin dark outline keeps pale points visible on the grey basemap
-        stroke = TRUE, color = "#444444", weight = 0.5, opacity = 0.8,
+        stroke = TRUE, color = "#111111", weight = 0.5, opacity = 0.8,
         clusterOptions = clusters,
         label = ~paste0(stream_name, " (", species, ")"),
         popup = ~paste0(
@@ -307,12 +316,12 @@ server <- function(input, output, session) {
 
       # Low-data trends: hollow points and dashed interval lines
       p <- ggplot(d, aes(pct_change, label, colour = trend_class, text = text)) +
-        geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
+        geom_vline(xintercept = 0, linetype = "dashed", colour = eb_col$muted) +
         geom_linerange(aes(xmin = pct_low, xmax = pct_high, linetype = reliability)) +
         geom_point(aes(shape = reliability), size = 1.8) +
-        scale_colour_manual(values = c("Declining" = "#D55E00",
-                                       "No clear trend" = "#999999",
-                                       "Increasing" = "#0072B2"),
+        scale_colour_manual(values = c("Declining" = "#D93A16",
+                                       "No clear trend" = "#8C8373",
+                                       "Increasing" = "#2340FF"),
                             name = NULL) +
         scale_shape_manual(values = c("Adequate data" = 16, "Low data" = 1),
                            name = NULL, drop = FALSE) +
@@ -320,8 +329,8 @@ server <- function(input, output, session) {
                               name = NULL, drop = FALSE) +
         coord_cartesian(xlim = c(-25, 25)) +
         labs(x = "% change per year", y = NULL) +
-        theme_minimal(base_size = 11) +
-        theme(axis.text.y = element_text(size = 8))
+        theme_eb(base_size = 11, grid = "x", bg = "white") +
+        theme(axis.text.y = element_text(size = 8), legend.position = "right")
 
       pl <- ggplotly(p, tooltip = "text")
 
@@ -337,7 +346,7 @@ server <- function(input, output, session) {
         pl$x$data[[i]]$showlegend  <- !(clean %in% seen)
         seen <- c(seen, clean)
       }
-      pl <- pl |> layout(font = list(family = "Bricolage Grotesque, sans-serif"))
+      pl <- pl |> eb_plotly(bg = "white", grid = "x")
       # Phones: legend across the top, so the chart can use the full width
       if (narrow) {
         pl <- pl |> layout(legend = list(orientation = "h", x = 0, y = 1, yanchor = "bottom"),
@@ -359,11 +368,11 @@ server <- function(input, output, session) {
     p <- ggplot(cu_counts, aes(year, spawners, group = streamid,
                                text = paste0(stream_name, "<br>", year, ": ",
                                              format(spawners, big.mark = ",")))) +
-      geom_line(colour = "grey70", linewidth = 0.4) +
-      geom_point(colour = "grey50", size = 0.8) +
+      geom_line(colour = eb_col$context, linewidth = 0.4) +
+      geom_point(colour = eb_col$muted, size = 0.8) +
       scale_y_continuous(transform = "log1p", labels = scales::comma) +
       labs(x = NULL, y = "Spawner estimate (log scale)") +
-      theme_minimal(base_size = 13)
+      theme_eb(base_size = 13, bg = "white")
 
     # Overlay the CU-level trend line, drawn through the mean of the model data
     tr <- selected_trend()
@@ -372,11 +381,11 @@ server <- function(input, output, session) {
         mutate(year_c   = year - trend_settings$centre_year,
                spawners = expm1(tr$mean_log + tr$slope * (year_c - tr$mean_year_c)))
       p <- p + geom_line(data = line, aes(year, spawners), inherit.aes = FALSE,
-                         colour = "#0072B2", linewidth = 1.2,
+                         colour = eb_accent(), linewidth = 1.2,
                          linetype = if (tr$low_data) "dashed" else "solid")
     }
 
-    ggplotly(p, tooltip = "text")
+    ggplotly(p, tooltip = "text") |> eb_plotly(bg = "white")
   })
 
   # Table of CU trends: the selected CU, or all CUs matching the filters
@@ -417,10 +426,13 @@ server <- function(input, output, session) {
     d <- quality_counts() |> count(year, name = "n_streams")
     validate(need(nrow(d) > 0, "No estimates match these filters."))
     ggplot(d, aes(year, n_streams)) +
-      geom_col(fill = "#2471a3", width = 1) +
+      # Light salmon area with a salmon line, so the change over time is easy to follow
+      geom_area(fill = eb_accent(3), alpha = 0.9) +
+      geom_line(colour = eb_accent(), linewidth = 1) +
+      scale_y_continuous(labels = scales::comma, expand = expansion(mult = c(0, 0.05))) +
       labs(title = "Streams with an estimate, by year",
            x = NULL, y = "Streams") +
-      theme_minimal(base_size = 13)
+      theme_eb(base_size = 13, bg = "white")
   })
 
   output$quality_plot <- renderPlot({
@@ -433,15 +445,16 @@ server <- function(input, output, session) {
       count(decade, quality)
     validate(need(nrow(d) > 0, "No estimates match these filters."))
     ggplot(d, aes(factor(decade), n, fill = quality)) +
-      geom_col(position = "fill") +
+      geom_col(position = "fill", colour = eb_col$ink, linewidth = 0.2) +
       scale_y_continuous(labels = scales::percent) +
-      scale_fill_manual(values = c("High" = "#0072B2", "Medium-High" = "#56B4E9",
-                                   "Medium" = "#009E73", "Medium-Low" = "#E69F00",
-                                   "Low" = "#D55E00", "Unknown" = "#CCCCCC"),
+      # One salmon colour, dark = higher quality, so the order reads at a glance
+      scale_fill_manual(values = c("High" = "#4A1424", "Medium-High" = "#8E2C45",
+                                   "Medium" = "#C2415E", "Medium-Low" = "#E58CA0",
+                                   "Low" = "#F6CBD5", "Unknown" = "#C9C1B3"),
                         name = "Survey quality") +
       labs(title = "Survey quality of estimates, by decade",
            x = NULL, y = "Share of estimates") +
-      theme_minimal(base_size = 13)
+      theme_eb(base_size = 13, bg = "white")
   })
 }
 
